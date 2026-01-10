@@ -29,6 +29,16 @@ RD_API_TOKEN=your_token_here
 
 Get your token from: https://real-debrid.com/apitoken
 
+### Download Directory
+
+Optionally set a custom download directory:
+
+```
+DOWNLOAD_DIR=/path/to/downloads
+```
+
+If not set, files are saved to your system's default Downloads folder.
+
 ## Usage
 
 ```bash
