@@ -1,0 +1,21 @@
+[package]
+name = "littlejohn"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal UI for littlejohn torrent search with Real-Debrid integration"
+
+[dependencies]
+ratatui = "0.30"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dotenvy = "0.15"
+anyhow = "1"
+dirs = "5"
+urlencoding = "2"
+scraper = "0.22"
+regex = "1"
