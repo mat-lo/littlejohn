@@ -11,7 +11,7 @@ use anyhow::Result;
 use reqwest::Client;
 use std::time::Duration;
 
-pub use log::{init_log, log_error, log_info, read_recent_logs, get_log_path};
+pub use log::{init_log, log_error, log_info};
 
 pub use x1337::scrape_1337x;
 pub use tpb::scrape_tpb;
