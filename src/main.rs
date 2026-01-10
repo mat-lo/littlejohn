@@ -309,6 +309,9 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Initialize scraper logging
+    scrapers::init_log();
+
     // Initialize terminal
     let mut terminal = ratatui::init();
 

@@ -5,10 +5,13 @@ pub mod tpb;
 pub mod bitsearch;
 pub mod yts;
 pub mod ilcorsaronero;
+pub mod log;
 
 use anyhow::Result;
 use reqwest::Client;
 use std::time::Duration;
+
+pub use log::{init_log, log_error, log_info, read_recent_logs, get_log_path};
 
 pub use x1337::scrape_1337x;
 pub use tpb::scrape_tpb;
@@ -76,8 +79,13 @@ pub const SCRAPERS: &[&str] = &["1337x", "tpb", "bitsearch", "yts", "ilcorsarone
 pub async fn search_all(query: &str, page: u32) -> Vec<TorrentResult> {
     let client = match create_client() {
         Ok(c) => c,
-        Err(_) => return Vec::new(),
+        Err(e) => {
+            log_error("client", &format!("Failed to create HTTP client: {}", e));
+            return Vec::new();
+        }
     };
+
+    log_info("search", &format!("Searching for '{}' (page {})", query, page));
 
     // Run all scrapers in parallel
     let (r1337x, rtpb, rbitsearch, ryts, rilcorsaronero) = tokio::join!(
@@ -90,22 +98,53 @@ pub async fn search_all(query: &str, page: u32) -> Vec<TorrentResult> {
 
     let mut results = Vec::new();
 
-    // Collect results, adding source
-    for r in r1337x.unwrap_or_default() {
-        results.push(r);
+    // Collect results with logging
+    match r1337x {
+        Some(ref r) if !r.is_empty() => {
+            log_info("1337x", &format!("Found {} results", r.len()));
+            results.extend(r.clone());
+        }
+        Some(_) => log_info("1337x", "No results found"),
+        None => log_error("1337x", "Scraper failed (returned None)"),
     }
-    for r in rtpb.unwrap_or_default() {
-        results.push(r);
+
+    match rtpb {
+        Some(ref r) if !r.is_empty() => {
+            log_info("tpb", &format!("Found {} results", r.len()));
+            results.extend(r.clone());
+        }
+        Some(_) => log_info("tpb", "No results found"),
+        None => log_error("tpb", "Scraper failed (returned None)"),
     }
-    for r in rbitsearch.unwrap_or_default() {
-        results.push(r);
+
+    match rbitsearch {
+        Some(ref r) if !r.is_empty() => {
+            log_info("bitsearch", &format!("Found {} results", r.len()));
+            results.extend(r.clone());
+        }
+        Some(_) => log_info("bitsearch", "No results found"),
+        None => log_error("bitsearch", "Scraper failed (returned None)"),
     }
-    for r in ryts.unwrap_or_default() {
-        results.push(r);
+
+    match ryts {
+        Some(ref r) if !r.is_empty() => {
+            log_info("yts", &format!("Found {} results", r.len()));
+            results.extend(r.clone());
+        }
+        Some(_) => log_info("yts", "No results found"),
+        None => log_error("yts", "Scraper failed (returned None)"),
     }
-    for r in rilcorsaronero.unwrap_or_default() {
-        results.push(r);
+
+    match rilcorsaronero {
+        Some(ref r) if !r.is_empty() => {
+            log_info("ilcorsaronero", &format!("Found {} results", r.len()));
+            results.extend(r.clone());
+        }
+        Some(_) => log_info("ilcorsaronero", "No results found"),
+        None => log_error("ilcorsaronero", "Scraper failed (returned None)"),
     }
+
+    log_info("search", &format!("Total: {} results from all sources", results.len()));
 
     // Sort by seeders (descending)
     results.sort_by(|a, b| b.seeders.cmp(&a.seeders));

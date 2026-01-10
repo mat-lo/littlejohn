@@ -1,6 +1,6 @@
 //! ilCorsaroNero scraper - Italian torrent site, requires Firecrawl
 
-use super::{clean_text, TorrentResult};
+use super::{clean_text, log_error, log_info, TorrentResult};
 use regex::Regex;
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -17,28 +17,52 @@ struct FirecrawlRequest {
 
 /// Fetch URL using Firecrawl API
 async fn fetch_with_firecrawl(url: &str) -> Option<String> {
-    let api_key = std::env::var("FIRECRAWL_API_KEY").ok()?;
+    let api_key = match std::env::var("FIRECRAWL_API_KEY") {
+        Ok(key) if !key.is_empty() => key,
+        _ => {
+            log_error("ilcorsaronero", "FIRECRAWL_API_KEY not set - this source requires Firecrawl");
+            return None;
+        }
+    };
 
     // Create client with longer timeout for Firecrawl
-    let client = Client::builder()
+    let client = match Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()
-        .ok()?;
+    {
+        Ok(c) => c,
+        Err(e) => {
+            log_error("ilcorsaronero", &format!("Failed to create client: {}", e));
+            return None;
+        }
+    };
 
     let request = FirecrawlRequest {
         url: url.to_string(),
         formats: vec!["html".to_string()],
     };
 
-    let response = client
+    let response = match client
         .post("https://api.firecrawl.dev/v1/scrape")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request)
         .send()
         .await
-        .ok()?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            log_error("ilcorsaronero", &format!("Firecrawl request failed: {}", e));
+            return None;
+        }
+    };
 
-    let data: serde_json::Value = response.json().await.ok()?;
+    let data: serde_json::Value = match response.json().await {
+        Ok(d) => d,
+        Err(e) => {
+            log_error("ilcorsaronero", &format!("Firecrawl response parse error: {}", e));
+            return None;
+        }
+    };
 
     // Extract HTML from response - structure is { data: { html: "..." } }
     data.get("data")
@@ -151,18 +175,30 @@ pub async fn scrape_ilcorsaronero(
         format!("{}/search?q={}", BASE_URL, encoded)
     };
 
+    log_info("ilcorsaronero", &format!("Fetching: {}", url));
+
     // Fetch search page with Firecrawl
-    let html = fetch_with_firecrawl(&url).await?;
+    let html = match fetch_with_firecrawl(&url).await {
+        Some(h) => h,
+        None => {
+            log_error("ilcorsaronero", "Failed to fetch search page");
+            return None;
+        }
+    };
 
     // Parse search results
     let items = parse_search_results(&html);
 
     if items.is_empty() {
+        log_info("ilcorsaronero", "No items found in search results");
         return Some(Vec::new());
     }
 
+    log_info("ilcorsaronero", &format!("Found {} items, fetching details...", items.len()));
+
     // Fetch magnet links from detail pages (limit to 10)
     let mut results = Vec::new();
+    let mut magnet_failures = 0;
 
     for (name, detail_url, seeders, leechers, size) in items.into_iter().take(10) {
         if let Some(detail_html) = fetch_with_firecrawl(&detail_url).await {
@@ -180,9 +216,19 @@ pub async fn scrape_ilcorsaronero(
                     url: Some(detail_url),
                     category: None,
                 });
+            } else {
+                magnet_failures += 1;
             }
+        } else {
+            magnet_failures += 1;
         }
     }
+
+    if magnet_failures > 0 {
+        log_info("ilcorsaronero", &format!("{} magnet fetches failed", magnet_failures));
+    }
+
+    log_info("ilcorsaronero", &format!("Returning {} results", results.len()));
 
     Some(results)
 }

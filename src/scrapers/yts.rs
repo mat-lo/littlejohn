@@ -1,13 +1,13 @@
 //! YTS scraper with Firecrawl support
 
-use super::{clean_text, TorrentResult};
+use super::{clean_text, log_error, log_info, TorrentResult};
 use regex::Regex;
 use reqwest::Client;
 use scraper::{Html, Selector};
 use serde::Serialize;
 
-/// YTS domains to try
-const YTS_DOMAINS: &[&str] = &["yts.mx", "yts.lt"];
+/// YTS domains to try (yts.lt works better with Firecrawl)
+const YTS_DOMAINS: &[&str] = &["yts.lt", "yts.mx"];
 
 /// Standard trackers for YTS magnets
 const YTS_TRACKERS: &[&str] = &[
@@ -50,22 +50,40 @@ fn extract_hash_from_url(url: &str) -> Option<String> {
 
 /// Fetch URL using Firecrawl API (for bypassing anti-bot)
 async fn fetch_with_firecrawl(client: &Client, url: &str) -> Option<String> {
-    let api_key = std::env::var("FIRECRAWL_API_KEY").ok()?;
+    let api_key = match std::env::var("FIRECRAWL_API_KEY") {
+        Ok(key) if !key.is_empty() => key,
+        _ => {
+            log_info("yts", "FIRECRAWL_API_KEY not set - Firecrawl unavailable");
+            return None;
+        }
+    };
 
     let request = FirecrawlRequest {
         url: url.to_string(),
         formats: vec!["html".to_string()],
     };
 
-    let response = client
+    let response = match client
         .post("https://api.firecrawl.dev/v1/scrape")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request)
         .send()
         .await
-        .ok()?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            log_error("yts", &format!("Firecrawl request failed: {}", e));
+            return None;
+        }
+    };
 
-    let data: serde_json::Value = response.json().await.ok()?;
+    let data: serde_json::Value = match response.json().await {
+        Ok(d) => d,
+        Err(e) => {
+            log_error("yts", &format!("Firecrawl response parse error: {}", e));
+            return None;
+        }
+    };
 
     // Extract HTML from response - structure is { data: { html: "..." } }
     data.get("data")
@@ -79,19 +97,33 @@ async fn fetch_with_fallback(client: &Client, url: &str) -> Option<String> {
     // Try Firecrawl first (better for YTS anti-bot)
     if let Some(html) = fetch_with_firecrawl(client, url).await {
         if !html.is_empty() {
+            log_info("yts", "Using Firecrawl fetch");
             return Some(html);
         }
     }
 
     // Fall back to regular fetch
-    client
-        .get(url)
-        .send()
-        .await
-        .ok()?
-        .text()
-        .await
-        .ok()
+    log_info("yts", "Falling back to direct fetch");
+    match client.get(url).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            if !status.is_success() {
+                log_error("yts", &format!("HTTP {} for {}", status, url));
+                return None;
+            }
+            match resp.text().await {
+                Ok(text) => Some(text),
+                Err(e) => {
+                    log_error("yts", &format!("Body read error: {}", e));
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            log_error("yts", &format!("Request failed: {}", e));
+            None
+        }
+    }
 }
 
 /// Parse movie page and extract torrent info

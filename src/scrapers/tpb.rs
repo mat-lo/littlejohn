@@ -1,11 +1,12 @@
 //! The Pirate Bay scraper - uses proxy sites
 
-use super::{clean_text, TorrentResult};
+use super::{clean_text, log_error, log_info, TorrentResult};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 /// List of TPB proxy domains to try
 const TPB_PROXIES: &[&str] = &[
+    "thepiratebay11.com",
     "thepiratebay10.org",
     "piratebay.live",
     "thepiratebay.zone",
@@ -16,14 +17,33 @@ const TPB_PROXIES: &[&str] = &[
 async fn try_fetch_tpb(client: &Client, path: &str) -> Option<(String, String)> {
     for domain in TPB_PROXIES {
         let url = format!("https://{}{}", domain, path);
-        if let Ok(resp) = client.get(&url).send().await {
-            if let Ok(html) = resp.text().await {
-                if html.contains("searchResult") {
-                    return Some((html, domain.to_string()));
+        match client.get(&url).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if !status.is_success() {
+                    log_info("tpb", &format!("Proxy {} returned HTTP {}", domain, status));
+                    continue;
                 }
+                match resp.text().await {
+                    Ok(html) => {
+                        if html.contains("searchResult") {
+                            log_info("tpb", &format!("Using proxy: {}", domain));
+                            return Some((html, domain.to_string()));
+                        } else {
+                            log_info("tpb", &format!("Proxy {} returned HTML without searchResult", domain));
+                        }
+                    }
+                    Err(e) => {
+                        log_info("tpb", &format!("Proxy {} body read failed: {}", domain, e));
+                    }
+                }
+            }
+            Err(e) => {
+                log_info("tpb", &format!("Proxy {} connection failed: {}", domain, e));
             }
         }
     }
+    log_error("tpb", "All TPB proxies failed");
     None
 }
 

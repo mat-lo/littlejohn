@@ -6,6 +6,18 @@ description = "Terminal UI for littlejohn torrent search with Real-Debrid integr
 license = "MIT"
 repository = "https://github.com/m/littlejohn"
 
+[lib]
+name = "littlejohn"
+path = "src/lib.rs"
+
+[[bin]]
+name = "littlejohn"
+path = "src/main.rs"
+
+[[bin]]
+name = "test_scrapers"
+path = "src/test_scrapers.rs"
+
 [dependencies]
 ratatui = "0.30"
 crossterm = { version = "0.28", features = ["event-stream"] }
@@ -21,3 +33,4 @@ dirs = "5"
 urlencoding = "2"
 scraper = "0.22"
 regex = "1"
+chrono = "0.4"
