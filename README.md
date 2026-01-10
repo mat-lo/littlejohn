@@ -1,25 +1,27 @@
-# Goering
+# Goering TUI
 
-Torrent search API aggregator with Real-Debrid integration.
+Native terminal UI for torrent search with Real-Debrid integration, written in Rust.
 
 ## Features
 
-- Search multiple torrent sites simultaneously (1337x, Nyaa.si, YTS, TPB, etc.)
-- FastAPI REST API with unified JSON responses
-- Interactive CLI with Real-Debrid download integration
-- Results sorted by seeders with source priority
-- Background download manager with progress tracking
+- Fast, native terminal interface built with ratatui
+- Search multiple torrent sites in parallel (standalone, no backend required)
+- Real-Debrid integration for premium downloads
+- File picker for multi-file torrents
+- Built-in download manager with progress tracking
+- Vim-style keybindings (j/k navigation)
 
-## Installation
+## Building
 
 ```bash
-# Install dependencies
-uv sync
+cargo build --release
 ```
+
+The binary will be at `target/release/goering-tui`.
 
 ## Configuration
 
-Set your Real-Debrid API token in `.env`:
+Set your Real-Debrid API token in `.env` (in the project root or parent directory):
 
 ```
 RD_API_TOKEN=your_token_here
@@ -29,66 +31,99 @@ Get your token from: https://real-debrid.com/apitoken
 
 ## Usage
 
-### Interactive CLI
-
 ```bash
-uv run python -m goering.cli
+cargo run --release
 ```
 
-Features:
-- Search torrents with arrow key navigation
-- Select/filter torrent sources
-- Multi-file torrent support with file picker
-- Foreground or background downloads
-- Download progress tracking
-
-### API Server
+Or run the built binary directly:
 
 ```bash
-uv run uvicorn goering.app:app --host 0.0.0.0 --port 8000 --reload
+./target/release/goering-tui
 ```
 
-#### Endpoints
+## Keybindings
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | API info and available sites |
-| `GET /api/{site}/{query}` | Search a specific site |
-| `GET /api/{site}/{query}/{page}` | Search with pagination |
-| `GET /api/all/{query}` | Search all sites in parallel |
+### Search Screen
 
-#### Example
+| Key     | Action                       |
+| ------- | ---------------------------- |
+| `Enter` | Search / Process magnet link |
+| `s`     | Select sources               |
+| `d`     | View downloads               |
+| `Esc`   | Quit                         |
 
-```bash
-curl "http://localhost:8000/api/all/ubuntu"
-```
+### Results Screen
+
+| Key          | Action         |
+| ------------ | -------------- |
+| `j` / `Down` | Move down      |
+| `k` / `Up`   | Move up        |
+| `Enter`      | Select torrent |
+| `n`          | Next page      |
+| `p`          | Previous page  |
+| `s`          | Select sources |
+| `d`          | View downloads |
+| `/`          | Back to search |
+| `q`          | Quit           |
+
+### File Select Screen
+
+| Key          | Action                |
+| ------------ | --------------------- |
+| `j` / `Down` | Move down             |
+| `k` / `Up`   | Move up               |
+| `Space`      | Toggle file selection |
+| `a`          | Toggle all files      |
+| `Enter`      | Confirm selection     |
+| `Esc`        | Cancel                |
+
+### Downloads Screen
+
+| Key          | Action                  |
+| ------------ | ----------------------- |
+| `j` / `Down` | Move down               |
+| `k` / `Up`   | Move up                 |
+| `s`          | Start selected download |
+| `S`          | Start all downloads     |
+| `c`          | Cancel selected         |
+| `C`          | Cancel all              |
+| `x`          | Clear completed         |
+| `Esc`        | Back                    |
 
 ## Supported Sites
 
 - 1337x
-- Nyaa.si
-- YTS
 - The Pirate Bay (TPB)
 - BitSearch
-- GloDLS
+- YTS
 - Il Corsaro Nero
-- ExtTo
 
-## Project Structure
+## Dependencies
+
+- [ratatui](https://github.com/ratatui/ratatui) - Terminal UI framework
+- [tokio](https://tokio.rs) - Async runtime
+- [reqwest](https://github.com/seanmonstar/reqwest) - HTTP client
+- [scraper](https://github.com/causal-agent/scraper) - HTML parsing
+
+## Architecture
 
 ```
-goering/
-├── app.py          # FastAPI application
-├── cli.py          # Interactive terminal client
-├── realdebrid.py   # Real-Debrid API client
-├── download.py     # Download manager
+src/
+├── main.rs         # Application state, event loop, async messaging
+├── ui.rs           # Terminal UI rendering (ratatui)
+├── realdebrid.rs   # Real-Debrid API client
+├── lib.rs          # Shared types and utilities
 └── scrapers/       # Site-specific scrapers
-    ├── base.py     # Shared fetch utilities
-    ├── x1337.py    # 1337x scraper
-    ├── nyaasi.py   # Nyaa.si scraper
-    └── ...
+    ├── mod.rs      # Scraper registry and common types
+    ├── x1337.rs    # 1337x scraper
+    ├── tpb.rs      # TPB scraper
+    ├── bitsearch.rs
+    ├── yts.rs
+    └── ilcorsaronero.rs
 ```
 
-## Related
+The app uses an async message-passing architecture:
 
-See [goering-tui](./goering-tui/) for a native Rust TUI alternative.
+- Main loop handles keyboard events and renders UI
+- Background tasks handle scraping and API calls
+- Messages are sent back via tokio channels
