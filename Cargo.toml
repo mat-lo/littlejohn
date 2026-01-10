@@ -4,7 +4,7 @@ version = "0.4.0"
 edition = "2021"
 description = "Terminal UI for littlejohn torrent search with Real-Debrid integration"
 license = "MIT"
-repository = "https://github.com/m/littlejohn"
+repository = "https://github.com/mat-lo/littlejohn"
 
 [lib]
 name = "littlejohn"

@@ -17,6 +17,26 @@ Native terminal UI for torrent search with Real-Debrid integration, written in R
 cargo install littlejohn
 ```
 
+### Nix
+
+Run directly without installing:
+
+```bash
+nix run github:mat-lo/littlejohn
+```
+
+Or install to your profile:
+
+```bash
+nix profile install github:mat-lo/littlejohn
+```
+
+For development, enter a shell with all dependencies:
+
+```bash
+nix develop
+```
+
 ## Building from Source
 
 ```bash
