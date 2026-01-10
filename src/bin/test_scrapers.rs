@@ -24,8 +24,13 @@ fn print_results(name: &str, results: &Option<Vec<TorrentResult>>) {
 
 #[tokio::main]
 async fn main() {
-    // Load .env file
-    dotenvy::dotenv().ok();
+    // Load .env file - check current directory first, then config directory
+    if dotenvy::dotenv().is_err() {
+        if let Some(config_dir) = dirs::config_dir() {
+            let config_env = config_dir.join("littlejohn").join(".env");
+            dotenvy::from_path(&config_env).ok();
+        }
+    }
 
     let query = std::env::args().nth(1).unwrap_or_else(|| "matrix 1999".to_string());
     println!("\n🔍 Testing scrapers with query: \"{}\"", query);

@@ -27,7 +27,15 @@ The binary will be at `target/release/littlejohn`.
 
 ## Configuration
 
-Set your Real-Debrid API token in `.env` (in the project root or parent directory):
+Create a `.env` file with your settings. The app checks these locations (in order):
+
+1. `.env` in the current directory
+2. Config directory:
+   - Linux: `~/.config/littlejohn/.env`
+   - macOS: `~/Library/Application Support/littlejohn/.env`
+   - Windows: `%APPDATA%\littlejohn\.env`
+
+### Real-Debrid API Token (Required)
 
 ```
 RD_API_TOKEN=your_token_here
@@ -57,6 +65,10 @@ Get your key from: https://firecrawl.dev
 
 Without this, Il Corsaro Nero won't work and YTS may be less reliable.
 
+### First-Run Setup
+
+On first run, if no Real-Debrid token is configured, the app will show a setup wizard where you can enter your settings. You can also access settings anytime by pressing `Shift+S` from the search screen.
+
 ## Usage
 
 ```bash
@@ -77,6 +89,7 @@ Or run the built binary directly:
 | ------- | ---------------------------- |
 | `Enter` | Search / Process magnet link |
 | `s`     | Select sources               |
+| `S`     | Open settings                |
 | `d`     | View downloads               |
 | `Esc`   | Quit                         |
 

@@ -81,6 +81,8 @@ type Tui = Terminal<CrosstermBackend<Stdout>>;
 /// Application mode/screen
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
+    Setup,      // First-run setup wizard
+    Settings,   // Settings screen (accessible anytime)
     Search,
     Results,
     FileSelect,
@@ -88,6 +90,14 @@ pub enum AppMode {
     Downloads,
     Processing,
     Error(String),
+}
+
+/// Settings field being edited
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettingsField {
+    RdApiToken,
+    FirecrawlApiKey,
+    DownloadDir,
 }
 
 /// Source priority order (matching Python implementation)
@@ -135,6 +145,16 @@ pub struct App {
     pub downloads: Vec<Download>,
     /// Download cursor
     pub download_cursor: usize,
+    /// Current settings field being edited
+    pub settings_field: SettingsField,
+    /// Settings input: RD API Token
+    pub settings_rd_token: String,
+    /// Settings input: Firecrawl API Key
+    pub settings_firecrawl_key: String,
+    /// Settings input: Download Directory
+    pub settings_download_dir: String,
+    /// Cursor position in current settings input
+    pub settings_cursor: usize,
 }
 
 impl App {
@@ -144,6 +164,11 @@ impl App {
         // All sources enabled by default
         let enabled_sources: std::collections::HashSet<String> =
             scrapers::SCRAPERS.iter().map(|s| s.to_string()).collect();
+
+        // Load current settings from env
+        let settings_rd_token = std::env::var("RD_API_TOKEN").unwrap_or_default();
+        let settings_firecrawl_key = std::env::var("FIRECRAWL_API_KEY").unwrap_or_default();
+        let settings_download_dir = std::env::var("DOWNLOAD_DIR").unwrap_or_default();
 
         Self {
             mode: AppMode::Search,
@@ -166,11 +191,90 @@ impl App {
             source_cursor: 0,
             downloads: Vec::new(),
             download_cursor: 0,
+            settings_field: SettingsField::RdApiToken,
+            settings_rd_token,
+            settings_firecrawl_key,
+            settings_download_dir,
+            settings_cursor: 0,
         }
     }
 
     pub fn visible_height(&self) -> usize {
         20 // Approximate visible rows
+    }
+
+    /// Get the current settings field input
+    pub fn current_settings_input(&self) -> &str {
+        match self.settings_field {
+            SettingsField::RdApiToken => &self.settings_rd_token,
+            SettingsField::FirecrawlApiKey => &self.settings_firecrawl_key,
+            SettingsField::DownloadDir => &self.settings_download_dir,
+        }
+    }
+
+    /// Get the current settings field input mutably
+    pub fn current_settings_input_mut(&mut self) -> &mut String {
+        match self.settings_field {
+            SettingsField::RdApiToken => &mut self.settings_rd_token,
+            SettingsField::FirecrawlApiKey => &mut self.settings_firecrawl_key,
+            SettingsField::DownloadDir => &mut self.settings_download_dir,
+        }
+    }
+
+    /// Move to next settings field
+    pub fn next_settings_field(&mut self) {
+        self.settings_field = match self.settings_field {
+            SettingsField::RdApiToken => SettingsField::FirecrawlApiKey,
+            SettingsField::FirecrawlApiKey => SettingsField::DownloadDir,
+            SettingsField::DownloadDir => SettingsField::RdApiToken,
+        };
+        self.settings_cursor = self.current_settings_input().len();
+    }
+
+    /// Move to previous settings field
+    pub fn prev_settings_field(&mut self) {
+        self.settings_field = match self.settings_field {
+            SettingsField::RdApiToken => SettingsField::DownloadDir,
+            SettingsField::FirecrawlApiKey => SettingsField::RdApiToken,
+            SettingsField::DownloadDir => SettingsField::FirecrawlApiKey,
+        };
+        self.settings_cursor = self.current_settings_input().len();
+    }
+
+    /// Save settings to config file
+    pub fn save_settings(&self) -> std::io::Result<()> {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Config directory not found"))?
+            .join("littlejohn");
+
+        // Create directory if it doesn't exist
+        std::fs::create_dir_all(&config_dir)?;
+
+        let config_path = config_dir.join(".env");
+
+        let mut content = String::new();
+        content.push_str("# littlejohn configuration\n\n");
+
+        if !self.settings_rd_token.is_empty() {
+            content.push_str(&format!("RD_API_TOKEN={}\n", self.settings_rd_token));
+        }
+        if !self.settings_firecrawl_key.is_empty() {
+            content.push_str(&format!("FIRECRAWL_API_KEY={}\n", self.settings_firecrawl_key));
+        }
+        if !self.settings_download_dir.is_empty() {
+            content.push_str(&format!("DOWNLOAD_DIR={}\n", self.settings_download_dir));
+        }
+
+        std::fs::write(&config_path, content)?;
+        Ok(())
+    }
+
+    /// Reinitialize RD client with current token
+    pub fn reinit_rd_client(&mut self) {
+        if !self.settings_rd_token.is_empty() {
+            std::env::set_var("RD_API_TOKEN", &self.settings_rd_token);
+            self.rd_client = RealDebridClient::new().ok();
+        }
     }
 }
 
@@ -197,8 +301,13 @@ pub enum AppMessage {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Load .env file
-    dotenvy::dotenv().ok();
+    // Load .env file - check current directory first, then config directory
+    if dotenvy::dotenv().is_err() {
+        if let Some(config_dir) = dirs::config_dir() {
+            let config_env = config_dir.join("littlejohn").join(".env");
+            dotenvy::from_path(&config_env).ok();
+        }
+    }
 
     // Initialize terminal
     let mut terminal = ratatui::init();
@@ -206,9 +315,10 @@ async fn main() -> Result<()> {
     // Create app
     let mut app = App::new();
 
-    // Check RD token
-    if app.rd_client.is_none() {
-        app.status = "Warning: RD_API_TOKEN not set. Real-Debrid features disabled.".to_string();
+    // Show setup wizard if RD token is not set
+    if app.rd_client.is_none() && app.settings_rd_token.is_empty() {
+        app.mode = AppMode::Setup;
+        app.settings_cursor = 0;
     }
 
     // Create channel for async messages
@@ -268,6 +378,8 @@ async fn handle_key_event(
     }
 
     match &app.mode {
+        AppMode::Setup => handle_setup_keys(app, code),
+        AppMode::Settings => handle_settings_keys(app, code),
         AppMode::Search => handle_search_keys(app, code, tx).await,
         AppMode::Results => handle_results_keys(app, code, tx).await,
         AppMode::FileSelect => handle_file_select_keys(app, code, tx).await,
@@ -287,6 +399,143 @@ async fn handle_key_event(
     }
 }
 
+/// Handle setup wizard keys
+fn handle_setup_keys(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Tab | KeyCode::Down => {
+            app.next_settings_field();
+        }
+        KeyCode::BackTab | KeyCode::Up => {
+            app.prev_settings_field();
+        }
+        KeyCode::Char(c) => {
+            let cursor = app.settings_cursor;
+            app.current_settings_input_mut().insert(cursor, c);
+            app.settings_cursor += 1;
+        }
+        KeyCode::Backspace => {
+            if app.settings_cursor > 0 {
+                app.settings_cursor -= 1;
+                let cursor = app.settings_cursor;
+                app.current_settings_input_mut().remove(cursor);
+            }
+        }
+        KeyCode::Delete => {
+            let len = app.current_settings_input().len();
+            let cursor = app.settings_cursor;
+            if cursor < len {
+                app.current_settings_input_mut().remove(cursor);
+            }
+        }
+        KeyCode::Left => {
+            app.settings_cursor = app.settings_cursor.saturating_sub(1);
+        }
+        KeyCode::Right => {
+            let len = app.current_settings_input().len();
+            if app.settings_cursor < len {
+                app.settings_cursor += 1;
+            }
+        }
+        KeyCode::Home => {
+            app.settings_cursor = 0;
+        }
+        KeyCode::End => {
+            app.settings_cursor = app.current_settings_input().len();
+        }
+        KeyCode::Enter => {
+            // Save settings and continue
+            if app.settings_rd_token.is_empty() {
+                app.status = "RD API Token is required".to_string();
+            } else {
+                match app.save_settings() {
+                    Ok(_) => {
+                        app.reinit_rd_client();
+                        app.status = "Settings saved!".to_string();
+                        app.mode = AppMode::Search;
+                    }
+                    Err(e) => {
+                        app.status = format!("Failed to save: {}", e);
+                    }
+                }
+            }
+        }
+        KeyCode::Esc => {
+            // Skip setup (user can configure later)
+            app.mode = AppMode::Search;
+            app.status = "Setup skipped. Press Shift+S to configure settings.".to_string();
+        }
+        _ => {}
+    }
+}
+
+/// Handle settings screen keys
+fn handle_settings_keys(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Tab | KeyCode::Down => {
+            app.next_settings_field();
+        }
+        KeyCode::BackTab | KeyCode::Up => {
+            app.prev_settings_field();
+        }
+        KeyCode::Char(c) => {
+            let cursor = app.settings_cursor;
+            app.current_settings_input_mut().insert(cursor, c);
+            app.settings_cursor += 1;
+        }
+        KeyCode::Backspace => {
+            if app.settings_cursor > 0 {
+                app.settings_cursor -= 1;
+                let cursor = app.settings_cursor;
+                app.current_settings_input_mut().remove(cursor);
+            }
+        }
+        KeyCode::Delete => {
+            let len = app.current_settings_input().len();
+            let cursor = app.settings_cursor;
+            if cursor < len {
+                app.current_settings_input_mut().remove(cursor);
+            }
+        }
+        KeyCode::Left => {
+            app.settings_cursor = app.settings_cursor.saturating_sub(1);
+        }
+        KeyCode::Right => {
+            let len = app.current_settings_input().len();
+            if app.settings_cursor < len {
+                app.settings_cursor += 1;
+            }
+        }
+        KeyCode::Home => {
+            app.settings_cursor = 0;
+        }
+        KeyCode::End => {
+            app.settings_cursor = app.current_settings_input().len();
+        }
+        KeyCode::Enter => {
+            // Save settings
+            match app.save_settings() {
+                Ok(_) => {
+                    app.reinit_rd_client();
+                    app.status = "Settings saved!".to_string();
+                    app.mode = AppMode::Search;
+                }
+                Err(e) => {
+                    app.status = format!("Failed to save: {}", e);
+                }
+            }
+        }
+        KeyCode::Esc => {
+            // Cancel without saving
+            // Reload settings from env
+            app.settings_rd_token = std::env::var("RD_API_TOKEN").unwrap_or_default();
+            app.settings_firecrawl_key = std::env::var("FIRECRAWL_API_KEY").unwrap_or_default();
+            app.settings_download_dir = std::env::var("DOWNLOAD_DIR").unwrap_or_default();
+            app.mode = AppMode::Search;
+        }
+        _ => {}
+    }
+}
+
 async fn handle_search_keys(
     app: &mut App,
     code: KeyCode,
@@ -297,6 +546,13 @@ async fn handle_search_keys(
         KeyCode::Char('s') if app.search_input.is_empty() => {
             app.source_cursor = 0;
             app.mode = AppMode::SourceSelect;
+            return;
+        }
+        KeyCode::Char('S') if app.search_input.is_empty() => {
+            // Open settings (Shift+S)
+            app.settings_field = SettingsField::RdApiToken;
+            app.settings_cursor = app.settings_rd_token.len();
+            app.mode = AppMode::Settings;
             return;
         }
         KeyCode::Char('d') if app.search_input.is_empty() => {

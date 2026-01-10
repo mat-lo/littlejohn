@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, Wrap},
 };
 
-use crate::{App, AppMode, DownloadStatus, format_bytes, scrapers};
+use crate::{App, AppMode, DownloadStatus, SettingsField, format_bytes, scrapers};
 
 /// Main draw function
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -24,6 +24,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
     draw_header(frame, app, layout[0]);
 
     match &app.mode {
+        AppMode::Setup => draw_setup(frame, app, layout[1]),
+        AppMode::Settings => draw_settings(frame, app, layout[1]),
         AppMode::Search => draw_search(frame, app, layout[1]),
         AppMode::Results => draw_results(frame, app, layout[1]),
         AppMode::FileSelect => draw_file_select(frame, app, layout[1]),
@@ -43,6 +45,143 @@ fn draw_header(frame: &mut Frame, _app: &App, area: Rect) {
         .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
 
     frame.render_widget(title, area);
+}
+
+fn draw_setup(frame: &mut Frame, app: &App, area: Rect) {
+    draw_settings_form(frame, app, area, true);
+}
+
+fn draw_settings(frame: &mut Frame, app: &App, area: Rect) {
+    draw_settings_form(frame, app, area, false);
+}
+
+fn draw_settings_form(frame: &mut Frame, app: &App, area: Rect, is_setup: bool) {
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),  // Title/Instructions
+            Constraint::Length(3),  // RD Token field
+            Constraint::Length(3),  // Firecrawl field
+            Constraint::Length(3),  // Download Dir field
+            Constraint::Min(0),     // Help text
+        ])
+        .margin(1)
+        .split(area);
+
+    // Title and instructions
+    let title = if is_setup {
+        "Welcome! Please configure your settings to get started."
+    } else {
+        "Settings - Edit your configuration"
+    };
+    let title_widget = Paragraph::new(title)
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(Alignment::Center);
+    frame.render_widget(title_widget, layout[0]);
+
+    // Helper to draw a field
+    let draw_field = |frame: &mut Frame, area: Rect, label: &str, value: &str, is_active: bool, is_secret: bool, cursor_pos: usize| {
+        let display_value = if is_secret && !value.is_empty() {
+            if is_active {
+                value.to_string()
+            } else {
+                "*".repeat(value.len().min(20))
+            }
+        } else {
+            value.to_string()
+        };
+
+        let style = if is_active {
+            Style::default().fg(Color::White)
+        } else {
+            Style::default().fg(Color::Gray)
+        };
+
+        let border_style = if is_active {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let field = Paragraph::new(display_value)
+            .style(style)
+            .block(
+                Block::default()
+                    .title(label)
+                    .borders(Borders::ALL)
+                    .border_style(border_style)
+            );
+
+        frame.render_widget(field, area);
+
+        // Draw cursor if active
+        if is_active {
+            frame.set_cursor_position((
+                area.x + 1 + cursor_pos as u16,
+                area.y + 1,
+            ));
+        }
+    };
+
+    // RD Token field
+    let is_rd_active = app.settings_field == SettingsField::RdApiToken;
+    draw_field(
+        frame,
+        layout[1],
+        "Real-Debrid API Token (required)",
+        &app.settings_rd_token,
+        is_rd_active,
+        true,
+        if is_rd_active { app.settings_cursor } else { 0 },
+    );
+
+    // Firecrawl field
+    let is_fc_active = app.settings_field == SettingsField::FirecrawlApiKey;
+    draw_field(
+        frame,
+        layout[2],
+        "Firecrawl API Key (optional)",
+        &app.settings_firecrawl_key,
+        is_fc_active,
+        true,
+        if is_fc_active { app.settings_cursor } else { 0 },
+    );
+
+    // Download Dir field
+    let is_dd_active = app.settings_field == SettingsField::DownloadDir;
+    draw_field(
+        frame,
+        layout[3],
+        "Download Directory (optional, defaults to ~/Downloads)",
+        &app.settings_download_dir,
+        is_dd_active,
+        false,
+        if is_dd_active { app.settings_cursor } else { 0 },
+    );
+
+    // Help text
+    let help = if is_setup {
+        vec![
+            "",
+            "Tab/Down: Next field   |   Shift+Tab/Up: Previous field",
+            "Enter: Save and continue   |   Esc: Skip setup",
+            "",
+            "Get your Real-Debrid token from: https://real-debrid.com/apitoken",
+            "Get your Firecrawl key from: https://firecrawl.dev (optional)",
+        ]
+    } else {
+        vec![
+            "",
+            "Tab/Down: Next field   |   Shift+Tab/Up: Previous field",
+            "Enter: Save   |   Esc: Cancel",
+        ]
+    };
+
+    let help_text = help.join("\n");
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    frame.render_widget(help_widget, layout[4]);
 }
 
 fn draw_search(frame: &mut Frame, app: &App, area: Rect) {
@@ -472,7 +611,9 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: Rect) {
 
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let help_text = match app.mode {
-        AppMode::Search => "[Enter] Search  [s] Sources  [d] Downloads  [Esc] Quit",
+        AppMode::Setup => "[Tab] Next  [Enter] Save  [Esc] Skip",
+        AppMode::Settings => "[Tab] Next  [Enter] Save  [Esc] Cancel",
+        AppMode::Search => "[Enter] Search  [s] Sources  [S] Settings  [d] Downloads  [Esc] Quit",
         AppMode::Results => "[j/k] Navigate  [Enter] Select  [s] Sources  [d] Downloads  [n/p] Page  [/] Search  [q] Quit",
         AppMode::FileSelect => "[j/k] Navigate  [Space] Toggle  [a] All  [Enter] Confirm  [Esc] Back",
         AppMode::SourceSelect => "[j/k] Navigate  [Space] Toggle  [a] All  [n] None  [Enter] Confirm  [Esc] Back",
