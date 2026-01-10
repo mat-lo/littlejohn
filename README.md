@@ -1,4 +1,4 @@
-# Goering TUI
+# littlejohn
 
 Native terminal UI for torrent search with Real-Debrid integration, written in Rust.
 
@@ -17,7 +17,7 @@ Native terminal UI for torrent search with Real-Debrid integration, written in R
 cargo build --release
 ```
 
-The binary will be at `target/release/goering-tui`.
+The binary will be at `target/release/littlejohn`.
 
 ## Configuration
 
@@ -48,7 +48,7 @@ cargo run --release
 Or run the built binary directly:
 
 ```bash
-./target/release/goering-tui
+./target/release/littlejohn
 ```
 
 ## Keybindings
