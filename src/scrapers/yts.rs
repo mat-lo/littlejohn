@@ -4,7 +4,7 @@ use super::{clean_text, TorrentResult};
 use regex::Regex;
 use reqwest::Client;
 use scraper::{Html, Selector};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// YTS domains to try
 const YTS_DOMAINS: &[&str] = &["yts.mx", "yts.lt"];
@@ -26,12 +26,6 @@ const YTS_TRACKERS: &[&str] = &[
 struct FirecrawlRequest {
     url: String,
     formats: Vec<String>,
-}
-
-/// Firecrawl scrape response
-#[derive(Deserialize)]
-struct FirecrawlResponse {
-    html: Option<String>,
 }
 
 /// Convert info hash to magnet link

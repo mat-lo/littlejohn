@@ -37,6 +37,7 @@ impl TorrentFile {
 
 /// Real-Debrid API response for adding magnet
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct AddMagnetResponse {
     id: String,
     uri: String,
@@ -53,6 +54,7 @@ struct ApiTorrentFile {
 
 /// Real-Debrid torrent info
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct TorrentInfo {
     id: String,
     status: String,
@@ -65,6 +67,7 @@ struct TorrentInfo {
 
 /// Real-Debrid unrestrict response
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct UnrestrictResponse {
     filename: String,
     download: String,
