@@ -39,6 +39,18 @@ DOWNLOAD_DIR=/path/to/downloads
 
 If not set, files are saved to your system's default Downloads folder.
 
+### Firecrawl (Optional)
+
+Some sites (Il Corsaro Nero, YTS) use anti-bot protection. Firecrawl helps bypass this:
+
+```
+FIRECRAWL_API_KEY=your_key_here
+```
+
+Get your key from: https://firecrawl.dev
+
+Without this, Il Corsaro Nero won't work and YTS may be less reliable.
+
 ## Usage
 
 ```bash
