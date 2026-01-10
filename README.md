@@ -11,7 +11,13 @@ Native terminal UI for torrent search with Real-Debrid integration, written in R
 - Built-in download manager with progress tracking
 - Vim-style keybindings (j/k navigation)
 
-## Building
+## Installation
+
+```bash
+cargo install littlejohn
+```
+
+## Building from Source
 
 ```bash
 cargo build --release
