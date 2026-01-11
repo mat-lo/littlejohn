@@ -35,7 +35,7 @@
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "littlejohn";
-          version = "0.4.0";
+          version = "0.6.0";
 
           src = ./.;
 

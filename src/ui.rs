@@ -614,7 +614,7 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         AppMode::Setup => "[Tab] Next  [Enter] Save  [Esc] Skip",
         AppMode::Settings => "[Tab] Next  [Enter] Save  [Esc] Cancel",
         AppMode::Search => "[Enter] Search  [s] Sources  [S] Settings  [d] Downloads  [Esc] Quit",
-        AppMode::Results => "[j/k] Navigate  [Enter] Select  [s] Sources  [d] Downloads  [n/p] Page  [/] Search  [q] Quit",
+        AppMode::Results => "[j/k] Nav  [Enter] Select  [c] Copy  [s] Sources  [d] Downloads  [n/p] Page  [/] Search  [q] Quit",
         AppMode::FileSelect => "[j/k] Navigate  [Space] Toggle  [a] All  [Enter] Confirm  [Esc] Back",
         AppMode::SourceSelect => "[j/k] Navigate  [Space] Toggle  [a] All  [n] None  [Enter] Confirm  [Esc] Back",
         AppMode::Downloads => "[j/k] Nav  [s] Start  [S] Start All  [c] Cancel  [C] Cancel All  [x] Clear  [Esc] Back",

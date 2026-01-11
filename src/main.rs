@@ -820,6 +820,30 @@ async fn handle_results_keys(
             app.download_cursor = 0;
             app.mode = AppMode::Downloads;
         }
+        KeyCode::Char('c') => {
+            // Copy magnet link to clipboard
+            if let Some(result) = app.results.get(app.selected_index) {
+                if !result.magnet.is_empty() {
+                    match arboard::Clipboard::new() {
+                        Ok(mut clipboard) => {
+                            match clipboard.set_text(&result.magnet) {
+                                Ok(_) => {
+                                    app.status = "Magnet copied to clipboard".to_string();
+                                }
+                                Err(e) => {
+                                    app.status = format!("Failed to copy: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            app.status = format!("Clipboard error: {}", e);
+                        }
+                    }
+                } else {
+                    app.status = "No magnet link available".to_string();
+                }
+            }
+        }
         KeyCode::Char('/') | KeyCode::Esc => {
             // Back to search
             app.mode = AppMode::Search;
